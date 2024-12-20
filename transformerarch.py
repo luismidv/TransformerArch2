@@ -21,11 +21,12 @@ class MultiHeadAttention(nn.Module):
         #scale_dotproduct_attention()
 
     def split_heads(self,x):
-         batch_size, seq_length, model_dimension = x.size()
-         return x.view(batch_size,seq_length,self.num_heads, model_dimension)
+        print(f"Feature size {x.size()}")
+        batch_size, seq_length, model_dimension = x.size()
+        return x.view(batch_size,seq_length,self.num_heads, self.d_k).transpose(1,2)
     
     def scale_dotproduct_attention(self, query, key, values, mask = None):
-        dot_product = torch.matmul(query, key.transpose(-2,1)) / math.sqrt(self.d_k)
+        dot_product = torch.matmul(query, key.transpose(-2,-1)) / math.sqrt(self.d_k)
         if mask is not None:
              dot_product = dot_product.masked_fill(mask == 0, -1e9)
         atention_probs = torch.softmax(dot_product, dim = 1)
@@ -34,20 +35,24 @@ class MultiHeadAttention(nn.Module):
 
     def combine_heads(self,x):
          batch_size,_,seq_length,d_k = x.size()
-         return x.tranpose(1,2).contiguous().view(batch_size, seq_length,self.model_dimension)
+         return x.transpose(1,2).contiguous().view(batch_size, seq_length,self.model_dimension)
           
 
 
     def forward(self,query,key,value,mask = None):
         #LINEAR TRANSFORMATION AND SPLIT INTO HEADS
-        
-        query = self.w_query(query)
-        key = self.w_key(key)
-        value = self.w_value(value)
+        print(f"Tamaño de la query {query.shape}")
+        query = self.split_heads(self.w_query(query))
+        key = self.split_heads(self.w_key(key))
+        value = self.split_heads(self.w_value(value))
+
+
 
         atention_output = self.scale_dotproduct_attention(query,key,value,mask)
-
-        output = self.w_o(atention_output)
+        print(f"Atention output {atention_output.shape}")
+        atention_combined = self.combine_heads(atention_output)
+        print(f"Atention output {atention_combined.shape}")
+        output = self.w_o(atention_combined)
         return output 
     
 class PositionWiseFeedForward(nn.Module):
@@ -89,7 +94,6 @@ class Encoder(nn.Module):
     def forward(self,x,mask):
         attention = self.multiH(x,x,x,mask)
         normalized = self.norm1(x + self.dropout(attention))
-        print(f"Hasta qui")
         posswise = self.possW(normalized)
         output = self.norm2(normalized + self.dropout(posswise))
         return output
@@ -139,16 +143,21 @@ dropout = 0.2
 
 
 #FEATURES AND LABELS
-features = torch.randint(1,src_vocab_size, (64, max_seq_length), dtype=torch.float32)
-labels = torch.randint(1,src_vocab_size, (64, max_seq_length),   dtype = torch.float32)
-print(features)
-print(labels)
+
+features = torch.randint(1,src_vocab_size, (64, max_seq_length), dtype=torch.int)
+labels = torch.randint(1,src_vocab_size, (64, max_seq_length),   dtype = torch.int)
+
 src_mask, tgt_mask = generate_mask(features, labels)
-
-multiH = MultiHeadAttention(max_seq_length, 10)
-
+multiH = MultiHeadAttention(model_dimension, 8)
+posenc = PositionEncoding(model_dimension, max_seq_length)
+dropout1 = nn.Dropout(0.1)
 encoder = Encoder(model_dimension, num_heads, d_ff, max_seq_length,dropout,src_mask)
-output = multiH(features,features,features)
-output = encoder(features,src_mask)
+
+encoder_embe = nn.Embedding(src_vocab_size,model_dimension)
+feature_embedded = encoder_embe(features)
+src_embed = dropout1(feature_embedded)
+
+output = multiH(src_embed,src_embed,src_embed)
+#output = encoder(features,src_mask)
 
 
