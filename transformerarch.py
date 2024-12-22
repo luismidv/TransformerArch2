@@ -66,16 +66,18 @@ class PositionWiseFeedForward(nn.Module):
         x = self.linear1(x)
         x = self.relu(x)
         x = self.linear2(x)
+        return x
 
 class PositionEncoding(nn.Module):
     def __init__(self,model_dimension, max_seq_length):
+        super(PositionEncoding,self).__init__()
         pe = torch.zeros(max_seq_length, model_dimension)
         position = torch.arange(0, max_seq_length, dtype = torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, model_dimension, 2).float()) * -(math.log(10000.0))
         pe[:, 0::2] = torch.sin(position*div_term)
         pe[:, 0::2] = torch.cos(position*div_term)
 
-        #self.register_buffer('pe', pe.unsqueeze(0))
+        self.register_buffer('pe', pe.unsqueeze(0))
     
     def forward(self,x):
         return x + self.pe[:, :x.size(1)]
@@ -85,7 +87,7 @@ class Encoder(nn.Module):
     def __init__(self, model_dimension, num_heads, d_ff, max_seq_length,dropout,mask):
         super(Encoder, self).__init__()
         self.multiH = MultiHeadAttention(model_dimension, num_heads)
-        self.possW = PositionWiseFeedForward(model_dimension, d_ff)
+        self.possw = PositionWiseFeedForward(model_dimension, d_ff)
         self.posenc = PositionEncoding(model_dimension, max_seq_length)
         self.dropout = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(model_dimension)
@@ -94,12 +96,12 @@ class Encoder(nn.Module):
     def forward(self,x,mask):
         attention = self.multiH(x,x,x,mask)
         normalized = self.norm1(x + self.dropout(attention))
-        posswise = self.possW(normalized)
+        posswise = self.possw(normalized)
         output = self.norm2(normalized + self.dropout(posswise))
         return output
     
 class Decoder(nn.Module):
-    def __init__(self,model_dimension, num_heads,d_ff,max_seq_length,dropout, ):
+    def __init__(self,model_dimension, num_heads,d_ff,max_seq_length,dropout,mask ):
         super(Decoder, self).__init__()
         self.multiH = MultiHeadAttention(model_dimension, num_heads)
         self.crossH = MultiHeadAttention(model_dimension, num_heads)
@@ -116,8 +118,8 @@ class Decoder(nn.Module):
         attention = self.multiH(x,x,x,mask)
         first_norm = self.layer1(x + self.layerdropout(attention))
         second_attention = self.crossH(first_norm, enc_output, enc_output, src_mask)
-        second_norm = self.layer2(first_norm + self.dropout(second_attention))
-        forw_output = self.possw(forw_output)
+        second_norm = self.layer2(first_norm + self.layerdropout(second_attention))
+        forw_output = self.possw(second_norm)
         output = self.layer3(second_norm + self.layerdropout(forw_output))
         return output
     
@@ -151,13 +153,17 @@ src_mask, tgt_mask = generate_mask(features, labels)
 multiH = MultiHeadAttention(model_dimension, 8)
 posenc = PositionEncoding(model_dimension, max_seq_length)
 dropout1 = nn.Dropout(0.1)
+
 encoder = Encoder(model_dimension, num_heads, d_ff, max_seq_length,dropout,src_mask)
+decoder = Decoder(model_dimension, num_heads, d_ff, max_seq_length,dropout,src_mask)
 
 encoder_embe = nn.Embedding(src_vocab_size,model_dimension)
 feature_embedded = encoder_embe(features)
 src_embed = dropout1(feature_embedded)
 
-output = multiH(src_embed,src_embed,src_embed)
-#output = encoder(features,src_mask)
+#output = multiH(src_embed,src_embed,src_embed)
+encoder_output = encoder(feature_embedded,src_mask)
+decoder_output = decoder(feature_embedded,tgt_mask,encoder_output,src_mask)
+
 
 
