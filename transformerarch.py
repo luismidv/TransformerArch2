@@ -76,9 +76,9 @@ class PositionEncoding(nn.Module):
         super(PositionEncoding,self).__init__()
         pe = torch.zeros(max_seq_length, model_dimension)
         position = torch.arange(0, max_seq_length, dtype = torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, model_dimension, 2).float()) * -(math.log(10000.0))
+        div_term = torch.exp(torch.arange(0, model_dimension, 2).float() * -(math.log(10000.0))/model_dimension)    
         pe[:, 0::2] = torch.sin(position*div_term)
-        pe[:, 0::2] = torch.cos(position*div_term)
+        pe[:, 1::2] = torch.cos(position*div_term)
 
         self.register_buffer('pe', pe.unsqueeze(0))
     
@@ -146,9 +146,12 @@ class Transformer(nn.Module):
     def forward(self, features,mask):
         #TODO FIX POSITIONAL ENCODING, GETTING NOT A NUMBER MATRIX IF USING IT
         encoded_feature = self.poss_enc(features)
+
         encoder_output = self.encoder(encoded_feature,mask)
+        print(f"Encoder output matrix {encoder_output}")
         decoder_output = self.decoder(encoded_feature,encoder_output, mask)
-        print(f"Decoder output {decoder_output}")
+
+        print(f"Decoder output matrix {decoder_output}")
 
         return decoder_output
 
@@ -184,9 +187,7 @@ encoder = Encoder(model_dimension, num_heads, d_ff, max_seq_length, dropout, src
 decoder = Decoder(model_dimension, num_heads, d_ff, max_seq_length, dropout ,src_mask)
 
 encoder_output = encoder(src_embed,src_mask)
-print(f"Encoder output {encoder_output}")
 decoder_output = decoder(src_embed,encoder_output, src_mask)
-print(f"Decoder output {decoder_output}")
 
 transfomer_arch = Transformer(model_dimension,max_seq_length,d_ff,dropout,src_mask)
 trf_output = transfomer_arch(src_embed,src_mask)
