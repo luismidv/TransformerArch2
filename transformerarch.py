@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.optim
 import math
 
+from sympy.physics.units import second
+
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, model_dimension, num_heads):
         super(MultiHeadAttention, self).__init__()
@@ -114,13 +117,14 @@ class Decoder(nn.Module):
         self.layer3 = nn.LayerNorm(model_dimension)
         self.layerdropout = nn.Dropout(dropout)
     
-    def forward(self,x,mask, enc_output,src_mask):
-        attention = self.multiH(x,x,x,mask)
+    def forward(self,x, enc_output,src_mask):
+        attention = self.multiH(x,x,x,src_mask)
         first_norm = self.layer1(x + self.layerdropout(attention))
         second_attention = self.crossH(first_norm, enc_output, enc_output, src_mask)
         second_norm = self.layer2(first_norm + self.layerdropout(second_attention))
         forw_output = self.possw(second_norm)
         output = self.layer3(second_norm + self.layerdropout(forw_output))
+
         return output
     
 
@@ -130,7 +134,24 @@ def generate_mask(src,tgt):
         seq_length = tgt.size(1)
         nopeak_mask = (1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal = 1)).bool()
         tgt_mask = tgt_mask & nopeak_mask
-        return src_mask, tgt_mask        
+        return src_mask, tgt_mask
+
+class Transformer(nn.Module):
+    def __init__(self, model_dimension, max_seq_length, d_ff, dropout, mask):
+        super(Transformer, self).__init__()
+        self.poss_enc = PositionEncoding(model_dimension, max_seq_length)
+        self.encoder = Encoder(model_dimension, num_heads, d_ff, max_seq_length, dropout, mask)
+        self.decoder = Decoder(model_dimension, num_heads, d_ff, max_seq_length, dropout ,mask)
+
+    def forward(self, features,mask):
+        #TODO FIX POSITIONAL ENCODING, GETTING NOT A NUMBER MATRIX IF USING IT
+        encoded_feature = self.poss_enc(features)
+        encoder_output = self.encoder(encoded_feature,mask)
+        decoder_output = self.decoder(encoded_feature,encoder_output, mask)
+        print(f"Decoder output {decoder_output}")
+
+        return decoder_output
+
 
 #VOCAB PARAMETERS
 src_vocab_size = 5000
@@ -150,20 +171,33 @@ features = torch.randint(1,src_vocab_size, (64, max_seq_length), dtype=torch.int
 labels = torch.randint(1,src_vocab_size, (64, max_seq_length),   dtype = torch.int)
 
 src_mask, tgt_mask = generate_mask(features, labels)
+
 multiH = MultiHeadAttention(model_dimension, 8)
 posenc = PositionEncoding(model_dimension, max_seq_length)
 dropout1 = nn.Dropout(0.1)
-
-encoder = Encoder(model_dimension, num_heads, d_ff, max_seq_length,dropout,src_mask)
-decoder = Decoder(model_dimension, num_heads, d_ff, max_seq_length,dropout,src_mask)
 
 encoder_embe = nn.Embedding(src_vocab_size,model_dimension)
 feature_embedded = encoder_embe(features)
 src_embed = dropout1(feature_embedded)
 
-#output = multiH(src_embed,src_embed,src_embed)
-encoder_output = encoder(feature_embedded,src_mask)
-decoder_output = decoder(feature_embedded,tgt_mask,encoder_output,src_mask)
+encoder = Encoder(model_dimension, num_heads, d_ff, max_seq_length, dropout, src_mask)
+decoder = Decoder(model_dimension, num_heads, d_ff, max_seq_length, dropout ,src_mask)
 
+encoder_output = encoder(src_embed,src_mask)
+print(f"Encoder output {encoder_output}")
+decoder_output = decoder(src_embed,encoder_output, src_mask)
+print(f"Decoder output {decoder_output}")
+
+transfomer_arch = Transformer(model_dimension,max_seq_length,d_ff,dropout,src_mask)
+trf_output = transfomer_arch(src_embed,src_mask)
+
+
+
+
+#encoder = Encoder(model_dimension, num_heads, d_ff, max_seq_length,dropout,src_mask)
+#decoder = Decoder(model_dimension, num_heads, d_ff, max_seq_length,dropout,src_mask)
+#output = multiH(src_embed,src_embed,src_embed)
+#encoder_output = encoder(feature_embedded,src_mask)
+#decoder_output = decoder(feature_embedded,tgt_mask,encoder_output,src_mask)
 
 
