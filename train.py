@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 import torch.optim
+
+import dataprepare
 import transformerarch
 
 
@@ -17,6 +19,9 @@ dropout = 0.2
 #FEATURES AND LABELS
 features = torch.randint(1,src_vocab_size, (64, max_seq_length))
 labels = torch.randint(1,src_vocab_size, (64, max_seq_length))
+
+#DATAPREPARE LOAD
+features_load, labels_load = dataprepare.csv_loader('./data/data.csv')
 
 
 #MASK CREATION

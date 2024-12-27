@@ -1,9 +1,17 @@
-num = int(input("Introduce un numero: "))
-def numiter(num):
-    print("Entering function")
-    if num == 1:
-        return num
-    else:
-        return numiter((num/2) +1)
+frase = "luis tiene un perro"
+for word in frase:
+    print(word)
 
-numiter(num)
+
+list = ['luismi','luismi','luismi','luismi','luismi','luismi','luismi','luismi','luismi', ]
+import re
+
+
+
+counter = 0
+
+for word in list :
+    list[counter] = regTokenize(word)
+
+print(list)
+
