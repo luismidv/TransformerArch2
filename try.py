@@ -1,17 +1,7 @@
-frase = "luis tiene un perro"
-for word in frase:
-    print(word)
+from transformers import AutoTokenizer, AutoModel
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
+texto = "Hola buenos dias"
 
-list = ['luismi','luismi','luismi','luismi','luismi','luismi','luismi','luismi','luismi', ]
-import re
-
-
-
-counter = 0
-
-for word in list :
-    list[counter] = regTokenize(word)
-
-print(list)
-
+tok_text = tokenizer(texto)
+print(tok_text)
